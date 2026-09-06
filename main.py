@@ -2,8 +2,10 @@ import id_execute
 import asyncio
 import os
 import pprint
+import time
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
+from tqdm import tqdm
 from TikTokApi import TikTokApi
 from colorama import Fore, Back, Style, init
 
@@ -28,19 +30,32 @@ class Youtube:
         print(f"Всего Youtube ссылок: {Fore.YELLOW}{len(links)}{Style.RESET_ALL}")
 
     def printViews(self) -> None:
-        self.request = self.youtube.videos().list(
-            part="snippet,statistics",
-            id=",".join(self.video_ids)
+        pbar = tqdm(
+            total=len(self.video_ids),
+            desc="YouTube",
+            position=0,
+            leave=True,
+            ncols=80
         )
-        self.response = self.request.execute()
+        
+        for video_id in self.video_ids:
+            request = self.youtube.videos().list(
+                part="snippet,statistics",
+                id=video_id
+            )
+            response = request.execute()
 
-        for video in self.response.get("items", []):
-            self.title = video["snippet"]["title"]
-            self.views = video["statistics"].get("viewCount", "Нет данных")
+            for video in response.get("items", []):
+                title = video["snippet"]["title"]
+                views = video["statistics"].get("viewCount", "Нет данных")
+                
+                tqdm.write(f"\n🎬 {title}")
+                tqdm.write(f"📊 Просмотров: {int(views):,}")
+                tqdm.write("-" * 30)
             
-            print("\n🎬 {title}".format(title = self.title))
-            print("📊 Просмотров: {views:,}".format(views = int(self.views)))
-            print("-" * 30)
+            pbar.update(1)
+        
+        pbar.close()
 
 class TikTok:
     _MS_TOKEN_1 = os.getenv("MS_TOKEN_1")
@@ -56,13 +71,20 @@ class TikTok:
         self.video_urls = []
 
         for video_url in links:
-            # self.video_ids.append(id_execute.extract_video_id(video_url))
             normal_url = video_url.split("?")[0]
             self.video_urls.append(normal_url)
 
         print(f"Всего TikTok ссылок: {Fore.YELLOW}{len(links)}{Style.RESET_ALL}")
 
     async def printViews(self) -> None:
+        pbar = tqdm(
+            total=len(self.video_urls),
+            desc="TikTok",
+            position=0,
+            leave=True,
+            ncols=80
+        )
+
         async with TikTokApi() as tApi:
             await tApi.create_sessions(
                 ms_tokens=self.ms_tokens,
@@ -74,6 +96,8 @@ class TikTok:
 
             # await asyncio.sleep(2)
 
+            tqdm.write("Информация о тт видео:")
+
             for video_url in self.video_urls:
                 await asyncio.sleep(1)
                 video = tApi.video(url = video_url)
@@ -84,10 +108,13 @@ class TikTok:
                 description = video_data.get("desc", "Нет описания")
                 views = stats["playCount"]
 
-                print(f"\n🎬 Автор: {author}")
-                print(f"Описание: {description}")
-                print(f"👁️ Просмотров: {views:,}")
-                print("-" * 30)
+                tqdm.write(f"\n🎬 Автор: {author}")
+                tqdm.write(f"Описание: {description}")
+                tqdm.write(f"👁️ Просмотров: {views:,}")
+                tqdm.write("-" * 30)
+
+                pbar.update(1)
+            pbar.close()
 
 async def MainProgram() -> None:
     YoutubeStat = Youtube()
