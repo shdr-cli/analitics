@@ -1,28 +1,27 @@
 from urllib.parse import urlparse, parse_qs
 
 def extract_video_id(url: str) -> str | None:
-    """
-    Извлекает ID видео из ссылок YouTube и TikTok.
-    
-    YouTube:
-    - https://www.youtube.com/watch?v=VIDEO_ID
-    - https://youtu.be/VIDEO_ID
-    - https://www.youtube.com/embed/VIDEO_ID
-    
-    TikTok:
-    - https://www.tiktok.com/@username/video/VIDEO_ID
-    - https://www.tiktok.com/@username/video/VIDEO_ID?is_from_webapp=1
-    - https://vm.tiktok.com/ABCDEFG/ (короткая ссылка)
-    - https://vt.tiktok.com/ABCDEFG/ (короткая ссылка)
-    """
-    
     parsed = urlparse(url)
 
-    if parsed.hostname in ("www.youtube.com", "youtube.com"):
-        return parse_qs(parsed.query).get("v")[0]
-
-    if "tiktok.com" in parsed.hostname:
-        if "/video/" in parsed.path:
-            video_id = parsed.path.split("/video/")[-1].split("/")[0]
+    if parsed.hostname in ("www.youtube.com", "youtube.com", "youtu.be"):
+        if parsed.hostname == "youtu.be":
+            return parsed.path.lstrip("/")
+        
+        if parsed.path.startswith("/watch"):
+            params = parse_qs(parsed.query)
+            video_id = params.get("v", [None])[0]
+            if video_id:
+                return video_id
+        
+        if "/embed/" in parsed.path:
+            return parsed.path.split("/embed/")[-1].split("/")[0]
+        
+        if "/shorts/" in parsed.path:
+            video_id = parsed.path.split("/shorts/")[-1].split("/")[0]
+            video_id = video_id.split("?")[0]
             return video_id
+        
+        if parsed.path.startswith("/v/"):
+            return parsed.path.split("/v/")[-1].split("/")[0]
+        
     return None

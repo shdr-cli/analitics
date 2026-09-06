@@ -39,7 +39,7 @@ class Youtube:
             self.views = video["statistics"].get("viewCount", "Нет данных")
             
             print("\n🎬 {title}".format(title = self.title))
-            print("📊 Просмотров: {views}".format(views = self.views))
+            print("📊 Просмотров: {views:,}".format(views = int(self.views)))
             print("-" * 30)
 
 class TikTok:
