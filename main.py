@@ -1,29 +1,100 @@
 import id_execute
+import asyncio
+import os
+import pprint
+from dotenv import load_dotenv
 from googleapiclient.discovery import build
+from TikTokApi import TikTokApi
+from colorama import Fore, Back, Style, init
 
-YOUTUBE_API = "AIzaSyCuBNop40nkdWURRk1DEoKmM4lGT_NRSnE"
+load_dotenv() # dotenv
+init() # colorama
 
-youtube = build("youtube", "v3", developerKey=YOUTUBE_API)
+class Youtube:
+    _YOUTUBE_API = os.getenv("YOUTUBE_API")
 
-with open("youtube.txt", "r") as file:
-    links = file.readlines()
+    def __init__(self) -> None:
+        self.youtube = build("youtube", "v3", developerKey = self.__class__._YOUTUBE_API)
 
-links = [link.strip() for link  in links if link.strip()]
-video_ids = [] # Максимум 50 за раз
+        with open("youtube.txt", "r") as file:
+            links = file.readlines()
 
-for video_url in links:
-    video_ids.append(id_execute.extract_video_id(video_url))
+        links = [link.strip() for link in links if link.strip()]
+        self.video_ids = [] # Максимум 50 за раз
 
-request = youtube.videos().list(
-    part="snippet,statistics",
-    id=",".join(video_ids)
-)
-response = request.execute()
+        for video_url in links:
+            self.video_ids.append(id_execute.extract_video_id(video_url))
 
-for video in response.get("items", []):
-    title = video["snippet"]["title"]
-    views = video["statistics"].get("viewCount", "Нет данных")
-    
-    print("\n🎬 {title}".format(title=title))
-    print("📊 Просмотров: {views}".format(views=views))
-    print("-" * 20)
+        print(f"Всего Youtube ссылок: {Fore.YELLOW}{len(links)}{Style.RESET_ALL}")
+
+    def printViews(self) -> None:
+        self.request = self.youtube.videos().list(
+            part="snippet,statistics",
+            id=",".join(self.video_ids)
+        )
+        self.response = self.request.execute()
+
+        for video in self.response.get("items", []):
+            self.title = video["snippet"]["title"]
+            self.views = video["statistics"].get("viewCount", "Нет данных")
+            
+            print("\n🎬 {title}".format(title = self.title))
+            print("📊 Просмотров: {views}".format(views = self.views))
+            print("-" * 20)
+
+class TikTok:
+    _MS_TOKEN_1 = os.getenv("MS_TOKEN_1")
+    _MS_TOKEN_2 = os.getenv("MS_TOKEN_2")
+
+    def __init__(self) -> None:
+        self.ms_tokens = [self.__class__._MS_TOKEN_1, self.__class__._MS_TOKEN_2]
+
+    async def printViews(self) -> None:
+        async with TikTokApi() as tApi:
+            await tApi.create_sessions(
+                ms_tokens=self.ms_tokens,
+                num_sessions=1,
+                sleep_after=3,
+                headless=False,
+                browser="chromium"
+            )
+
+            await asyncio.sleep(2)
+
+            video_url = "https://www.tiktok.com/@newpeople_stav/video/7655247432900693269"
+
+            video = tApi.video(url=video_url)
+
+            video_data = await video.info()
+            stats = video_data["stats"]
+            author = video_data["author"]["nickname"]
+            description = video_data.get("desc", "Нет описания")
+            views = stats["playCount"]
+
+            print(f"🎬 Автор: {author}")
+            print(f"Описание: {description}")
+            print(f"👁️ Просмотров: {views:,}")
+
+async def MainProgram() -> None:
+    YoutubeStat = Youtube()
+    TikTokStat = TikTok()
+
+    YoutubeStat.printViews()
+    # await TikTokStat.printViews()
+
+def checkGetenv() -> bool:
+    toInit = True
+    if os.getenv("YOUTUBE_API") is None:
+        print("Переменная YOUTUBE_API отсутствует!")
+        toInit = False
+    if os.getenv("MS_TOKEN_1") is None:
+        print("Переменная MS_TOKEN_1 отсутствует!")
+        toInit = False
+    if os.getenv("MS_TOKEN_2") is None:
+        print("Переменная MS_TOKEN_2 отсутствует!")
+        toInit = False
+    return toInit
+
+if __name__ == "__main__":
+    if checkGetenv():
+        asyncio.run(MainProgram())
