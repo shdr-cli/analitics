@@ -11,7 +11,7 @@ from colorama import Fore, Back, Style, init
 load_dotenv() # dotenv
 init() # colorama
 
-def returnLinks(path: str) -> list:
+def return_links(path: str) -> list:
     """Возвращает массив ссылок из файла
 
     Args:
@@ -31,7 +31,7 @@ class YouTube:
     def __init__(self) -> None:
         self.youtube = build("youtube", "v3", developerKey = self.__class__._YOUTUBE_API)
 
-        links = returnLinks("youtube.txt")
+        links = return_links("../youtube.txt")
         
         self.video_ids = [] # Максимум 50 за раз
 
@@ -75,7 +75,7 @@ class TikTok:
     def __init__(self) -> None:
         self.ms_tokens = [self.__class__._MS_TOKEN_1, self.__class__._MS_TOKEN_2]
 
-        links = returnLinks("tiktok.txt")
+        links = return_links("../tiktok.txt")
         self.video_urls = []
 
         for video_url in links:
