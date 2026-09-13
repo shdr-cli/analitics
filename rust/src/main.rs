@@ -1,10 +1,12 @@
 use regex::Regex;
 use serde::Deserialize;
+use std::io;
 use std::env;
 use std::fs;
 use std::sync::LazyLock;
 use std::time::Duration;
 use url::Url;
+use num_format::{Locale, ToFormattedString};
 
 // ==========================================
 //           МОДЕЛИ ДАННЫХ
@@ -51,16 +53,48 @@ struct IgApiResponse {
     items: Option<Vec<IgMediaItem>>,
 }
 
+fn pause() {
+    print!("Нажмите Enter, чтобы выйти...");
+    
+    let mut buffer = String::new();
+    io::stdin().read_line(&mut buffer).unwrap();
+}
+
+fn int_parse(text: &str) -> String {
+    let text_int: u64 = text.parse().unwrap();
+    return text_int.to_formatted_string(&Locale::en);
+}
+
+fn file_build_release(path: &str) -> String {
+    let build_path: String = format!("../{}", path);
+
+    if return_links(path).is_ok() {
+        return String::from(path);
+    } else {
+        return build_path;
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenvy::from_path("../.env").expect("Файл .env не найден");
+    match dotenvy::from_path(".env") {
+        Ok(_) => {}
+        Err(_) => {
+            match dotenvy::from_path("../.env") {
+                Ok(_) => { }
+                Err(_) => {
+                    eprintln!("Файл .env не найден");
+                }
+            }
+        }
+    }
 
     let api_key: String = env::var("YOUTUBE_API").expect("Переменная YOUTUBE_API не задана");
     let session_id: String = env::var("INST_SESSION_ID").expect("Переменная INST_SESSION_ID не задана");
 
-    let urls_yt: Vec<String> = return_links("../youtube.txt").unwrap_or_default();
-    let urls_tt: Vec<String> = return_links("../tiktok.txt").unwrap_or_default();
-    let urls_inst: Vec<String> = return_links("../instagram.txt").unwrap_or_default();
+    let urls_yt = return_links(&file_build_release("youtube.txt")).unwrap_or_default();
+    let urls_tt = return_links(&file_build_release("tiktok.txt")).unwrap_or_default();
+    let urls_inst = return_links(&file_build_release("instagram.txt")).unwrap_or_default();
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
@@ -78,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(response) = fetch_youtube_data_batch(&client, chunk, &api_key).await {
             for item in response.items {
                 let views = item.statistics.view_count.as_deref().unwrap_or("0");
-                println!("{}: {}", views, item.id);
+                println!("{}: {}", int_parse(&views), item.id);
             }
         }
     }
@@ -87,9 +121,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nTIKTOK");
     for url in &urls_tt {
         if let Ok(Some(data)) = fetch_tiktok_data(&client, url).await {
-            println!("{}: {}", data.play_count, url);
+            println!("{}: {}", int_parse(&data.play_count.to_string()), url);
         } else {
-            println!("{}: 0", url);
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if let Ok(Some(data)) = fetch_tiktok_data(&client, url).await {
+                println!("{}: {}", int_parse(&data.play_count.to_string()), url);
+            } else {
+                println!("0: {}", url);
+            }
         }
         tokio::time::sleep(Duration::from_millis(400)).await;
     }
@@ -97,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Instagram
     println!("\nINSTAGRAM");
     for url in &urls_inst {
-        let views = match extract_instagram_shortcode(url) {
+        let play_views = match extract_instagram_shortcode(url) {
             Some(shortcode) => {
                 fetch_instagram_views(&client, &shortcode, &session_id)
                     .await
@@ -106,27 +145,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => 0,
         };
 
-        println!("{}: {}", views, url);
+        println!("{} : {}", int_parse(&play_views.to_string()), url);
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
+    pause();
     Ok(())
 }
 
 fn shortcode_to_media_id(shortcode: &str) -> Option<u64> {
+    const ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut id: u64 = 0;
-    for b in shortcode.bytes() {
-        let val = match b {
-            b'A'..=b'Z' => b - b'A',
-            b'a'..=b'z' => b - b'a' + 26,
-            b'0'..=b'9' => b - b'0' + 52,
-            b'-' => 62,
-            b'_' => 63,
-            _ => return None,
-        } as u64;
 
-        id = id.checked_mul(64)?.checked_add(val)?;
+    for ch in shortcode.chars() {
+        let value = ALPHABET.find(ch)? as u64;
+        id = id.checked_mul(64)?.checked_add(value)?;
     }
+
     Some(id)
 }
 
@@ -174,20 +209,20 @@ async fn fetch_instagram_views(
         return Ok(0);
     }
 
-    let ig_data: IgApiResponse = res.json().await?;
+    let inst_data: IgApiResponse = res.json().await?;
 
-    if let Some(item) = ig_data.items.and_then(|items| items.into_iter().next()) {
-        let views = item
+    if let Some(item) = inst_data.items.and_then(|items| items.into_iter().next()) {
+        let play_views = item
             .play_count
             .or(item.view_count)
             .or(item.video_play_count)
             .or(item.fb_play_count)
             .unwrap_or(0);
 
-        return Ok(views);
+        return Ok(play_views);
     }
 
-    Ok(0)
+    return Ok(0);
 }
 
 async fn fetch_youtube_data_batch(
