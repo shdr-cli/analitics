@@ -1,0 +1,12 @@
+services:
+  scraper:
+    build: .
+    image: media-scraper:latest
+    container_name: rust-media-scraper
+    env_file:
+      - .env
+    volumes:
+      - ./youtube.txt:/app/youtube.txt
+      - ./tiktok.txt:/app/tiktok.txt
+      - ./instagram.txt:/app/instagram.txt
+      - ./:/app/out
