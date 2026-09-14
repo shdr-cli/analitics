@@ -1,5 +1,7 @@
+mod social_models;
+use social_models::*;
+
 use regex::Regex;
-use serde::Deserialize;
 use std::io;
 use std::env;
 use std::fs;
@@ -8,53 +10,8 @@ use std::time::Duration;
 use url::Url;
 use num_format::{Locale, ToFormattedString};
 
-// ==========================================
-//           МОДЕЛИ ДАННЫХ
-// ==========================================
-
-#[derive(Deserialize)]
-struct VideoStatistics {
-    #[serde(rename = "viewCount")]
-    view_count: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct VideoItem {
-    id: String,
-    statistics: VideoStatistics,
-}
-
-#[derive(Deserialize)]
-struct YouTubeResponse {
-    items: Vec<VideoItem>,
-}
-
-#[derive(Deserialize)]
-struct TikWmData {
-    play_count: u64,
-}
-
-#[derive(Deserialize)]
-struct TikWmResponse {
-    code: i32,
-    data: Option<TikWmData>,
-}
-
-#[derive(Deserialize)]
-struct IgMediaItem {
-    play_count: Option<u64>,
-    view_count: Option<u64>,
-    video_play_count: Option<u64>,
-    fb_play_count: Option<u64>,
-}
-
-#[derive(Deserialize)]
-struct IgApiResponse {
-    items: Option<Vec<IgMediaItem>>,
-}
-
 fn pause() {
-    print!("Нажмите Enter, чтобы выйти...");
+    println!("Нажмите Enter, чтобы выйти...");
     
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer).unwrap();
@@ -95,6 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let urls_yt = return_links(&file_build_release("youtube.txt")).unwrap_or_default();
     let urls_tt = return_links(&file_build_release("tiktok.txt")).unwrap_or_default();
     let urls_inst = return_links(&file_build_release("instagram.txt")).unwrap_or_default();
+
+    // let urls = return_links(&file_build_release("Ссылки.txt")).unwrap_or_default();
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
