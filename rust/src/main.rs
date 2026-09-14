@@ -1,4 +1,10 @@
+mod social;
 mod social_models;
+
+use social::{
+    YouTubeLink, TikTokLink, InstagramLink,
+    SocialLink
+};
 use social_models::*;
 
 use regex::Regex;
@@ -11,7 +17,7 @@ use url::Url;
 use num_format::{Locale, ToFormattedString};
 
 fn pause() {
-    println!("Нажмите Enter, чтобы выйти...");
+    println!("\nНажмите Enter, чтобы выйти...");
     
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer).unwrap();
@@ -49,63 +55,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_key: String = env::var("YOUTUBE_API").expect("Переменная YOUTUBE_API не задана");
     let session_id: String = env::var("INST_SESSION_ID").expect("Переменная INST_SESSION_ID не задана");
 
-    let urls_yt = return_links(&file_build_release("youtube.txt")).unwrap_or_default();
-    let urls_tt = return_links(&file_build_release("tiktok.txt")).unwrap_or_default();
-    let urls_inst = return_links(&file_build_release("instagram.txt")).unwrap_or_default();
-
-    // let urls = return_links(&file_build_release("Ссылки.txt")).unwrap_or_default();
+    let urls = return_links(&file_build_release("Ссылки.txt")).unwrap_or_default();
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
-        // .redirect(reqwest::redirect::Policy::none())
         .build()?;
 
-    // YouTube
-    println!("YOUTUBE");
-    let yt_ids: Vec<String> = urls_yt
-        .iter()
-        .filter_map(|url| extract_youtube_id(url))
-        .collect();
+    for url in &urls {
+        match social_type(url) {
+            Some(SocialLink::YouTube(yt)) => {
+                if let Ok(response) = get_youtube_data(&client, extract_youtube_id(&yt.link).unwrap(), &api_key).await {
+                    for item in response.items {
+                        let views = item.statistics.view_count.as_deref().unwrap_or("0");
+                        println!("{} : {}", int_parse(&views), yt.link);
+                    }
+                }
+            }
+            Some(SocialLink::TikTok(tt)) => {
+                if let Ok(Some(data)) = get_tiktok_data(&client, &tt.link).await {
+                    println!("{} : {}", int_parse(&data.play_count.to_string()), &tt.link);
+                }
+                else {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    if let Ok(Some(data)) = get_tiktok_data(&client, &tt.link).await {
+                        println!("{} : {}", int_parse(&data.play_count.to_string()), &tt.link);
+                    } else {
+                        println!("0 : {}", &tt.link);
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(400)).await;
+            }
+            Some(SocialLink::Instagram(inst)) => {
+                let play_views = match extract_instagram_shortcode(&inst.link) {
+                    Some(shortcode) => {
+                        get_instagram_data(&client, &shortcode, &session_id)
+                            .await
+                            .unwrap_or(0)
+                    }
+                    None => 0,
+                };
 
-    for chunk in yt_ids.chunks(50) {
-        if let Ok(response) = fetch_youtube_data_batch(&client, chunk, &api_key).await {
-            for item in response.items {
-                let views = item.statistics.view_count.as_deref().unwrap_or("0");
-                println!("{}: {}", int_parse(&views), item.id);
+                println!("{} : {}", int_parse(&play_views.to_string()), &inst.link);
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+            None => {
+                eprintln!("Неизвестный домен или неподдерживаемая ссылка: {}", url);
             }
         }
-    }
-
-    // TikTok
-    println!("\nTIKTOK");
-    for url in &urls_tt {
-        if let Ok(Some(data)) = fetch_tiktok_data(&client, url).await {
-            println!("{}: {}", int_parse(&data.play_count.to_string()), url);
-        } else {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            if let Ok(Some(data)) = fetch_tiktok_data(&client, url).await {
-                println!("{}: {}", int_parse(&data.play_count.to_string()), url);
-            } else {
-                println!("0: {}", url);
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(400)).await;
-    }
-
-    // Instagram
-    println!("\nINSTAGRAM");
-    for url in &urls_inst {
-        let play_views = match extract_instagram_shortcode(url) {
-            Some(shortcode) => {
-                fetch_instagram_views(&client, &shortcode, &session_id)
-                    .await
-                    .unwrap_or(0)
-            }
-            None => 0,
-        };
-
-        println!("{} : {}", int_parse(&play_views.to_string()), url);
-        tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
     pause();
@@ -134,7 +130,7 @@ fn extract_instagram_shortcode(input_url: &str) -> Option<String> {
         .map(|m| m.as_str().to_string())
 }
 
-async fn fetch_instagram_views(
+async fn get_instagram_data(
     client: &reqwest::Client,
     shortcode: &str,
     session_id: &str,
@@ -184,21 +180,20 @@ async fn fetch_instagram_views(
     return Ok(0);
 }
 
-async fn fetch_youtube_data_batch(
+async fn get_youtube_data(
     client: &reqwest::Client,
-    video_ids: &[String],
+    video_id: String,
     api_key: &str,
 ) -> Result<YouTubeResponse, reqwest::Error> {
-    let ids_joined = video_ids.join(",");
     let url = format!(
         "https://www.googleapis.com/youtube/v3/videos?part=statistics&id={}&key={}",
-        ids_joined, api_key
+        video_id, api_key
     );
 
     client.get(url).send().await?.json::<YouTubeResponse>().await
 }
 
-async fn fetch_tiktok_data(
+async fn get_tiktok_data(
     client: &reqwest::Client,
     video_url: &str,
 ) -> Result<Option<TikWmData>, reqwest::Error> {
@@ -216,6 +211,24 @@ async fn fetch_tiktok_data(
         Ok(response.data)
     } else {
         Ok(None)
+    }
+}
+
+fn social_type(url: &str) -> Option<SocialLink>{
+    if url.contains("youtube.com") || url.contains("youtu.be") {
+        Some(SocialLink::YouTube(YouTubeLink {
+            link: url.to_string(),
+        }))
+    } else if url.contains("tiktok.com") {
+        Some(SocialLink::TikTok(TikTokLink {
+            link: url.to_string(),
+        }))
+    } else if url.contains("instagram.com") {
+        Some(SocialLink::Instagram(InstagramLink {
+            link: url.to_string(),
+        }))
+    } else {
+        None
     }
 }
 

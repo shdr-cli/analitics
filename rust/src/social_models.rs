@@ -8,7 +8,6 @@ pub struct VideoStatistics {
 
 #[derive(Deserialize, Debug)]
 pub struct VideoItem {
-    pub id: String,
     pub statistics: VideoStatistics,
 }
 
