@@ -40,17 +40,7 @@ fn file_build_release(path: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    match dotenvy::from_path(".env") {
-        Ok(_) => {}
-        Err(_) => {
-            match dotenvy::from_path("../.env") {
-                Ok(_) => { }
-                Err(_) => {
-                    eprintln!("Файл .env не найден");
-                }
-            }
-        }
-    }
+    let _ = dotenvy::from_path(".env").or_else(|_| dotenvy::from_path("../.env"));
 
     let api_key: String = env::var("YOUTUBE_API").expect("Переменная YOUTUBE_API не задана");
     let session_id: String = env::var("INST_SESSION_ID").expect("Переменная INST_SESSION_ID не задана");
