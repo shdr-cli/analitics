@@ -26,16 +26,3 @@ pub struct TikWmResponse {
     pub code: i32,
     pub data: Option<TikWmData>,
 }
-
-#[derive(Deserialize, Debug)]
-pub struct IgMediaItem {
-    pub play_count: Option<u64>,
-    pub view_count: Option<u64>,
-    pub video_play_count: Option<u64>,
-    pub fb_play_count: Option<u64>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct IgApiResponse {
-    pub items: Option<Vec<IgMediaItem>>,
-}
